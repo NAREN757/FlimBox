@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import MovieCard from './MovieCard';
 
-const MovieRow = ({ title, movies, onSelect, onPlay, onToggle, favorites }) => {
+const MovieRow = ({ title, movies, onSelect, onPlay, onToggle, favorites, watchlist, onToggleWatchlist, showProgress }) => {
     const rowRef = useRef(null);
     const [showControls, setShowControls] = useState(false);
 
@@ -41,6 +41,9 @@ const MovieRow = ({ title, movies, onSelect, onPlay, onToggle, favorites }) => {
                                 onPlay={onPlay}
                                 onToggleFavorite={onToggle}
                                 isFavorite={favorites && favorites.some(f => f.imdbID === movie.imdbID)}
+                                onToggleWatchlist={onToggleWatchlist}
+                                isWatchlisted={watchlist && watchlist.some(w => w.imdbID === movie.imdbID)}
+                                progress={showProgress ? movie.progress : 0}
                             />
                         </div>
                     ))}
@@ -56,6 +59,7 @@ const MovieRow = ({ title, movies, onSelect, onPlay, onToggle, favorites }) => {
         </div>
     );
 };
+
 
 const styles = {
     rowContainer: {

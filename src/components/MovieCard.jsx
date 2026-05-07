@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Play, Check, ThumbsUp } from 'lucide-react';
+import { Plus, Play, Check, Bookmark } from 'lucide-react';
 
-const MovieCard = ({ movie, onClick, onPlay, onToggleFavorite, isFavorite }) => {
+const MovieCard = ({ movie, onClick, onPlay, onToggleFavorite, isFavorite, onToggleWatchlist, isWatchlisted, progress }) => {
     // Random badge for flavor (stable across renders)
     const { quality, match } = React.useMemo(() => {
         const qualities = ['HD', '4K', 'HDR'];
@@ -21,6 +21,11 @@ const MovieCard = ({ movie, onClick, onPlay, onToggleFavorite, isFavorite }) => 
         onToggleFavorite(movie);
     };
 
+    const handleWatchlistClick = (e) => {
+        e.stopPropagation();
+        if (onToggleWatchlist) onToggleWatchlist(movie);
+    };
+
     return (
         <div
             className="movie-card"
@@ -36,13 +41,27 @@ const MovieCard = ({ movie, onClick, onPlay, onToggleFavorite, isFavorite }) => 
                     loading="lazy"
                 />
 
+                {/* Continue Watching progress bar */}
+                {progress > 0 && (
+                    <div style={styles.progressBg}>
+                        <div style={{ ...styles.progressBar, width: `${progress}%` }} />
+                    </div>
+                )}
+
                 <div className="overlay" style={styles.overlay}>
                     <div style={styles.actions}>
                         <button style={styles.actionBtn} onClick={handlePlayClick} title="Play">
                             <Play size={20} fill="black" stroke="none" />
                         </button>
-                        <button style={styles.iconBtn} onClick={handleFavoriteClick} title={isFavorite ? "Remove" : "Add"}>
+                        <button style={styles.iconBtn} onClick={handleFavoriteClick} title={isFavorite ? "Remove from Favorites" : "Add to Favorites"}>
                             {isFavorite ? <Check size={18} color="#46d369" /> : <Plus size={18} color="white" />}
+                        </button>
+                        <button
+                            style={{ ...styles.iconBtn, ...(isWatchlisted ? styles.iconBtnActive : {}) }}
+                            onClick={handleWatchlistClick}
+                            title={isWatchlisted ? "Remove from Watchlist" : "Save to Watchlist"}
+                        >
+                            <Bookmark size={16} color={isWatchlisted ? '#E50914' : 'white'} fill={isWatchlisted ? '#E50914' : 'none'} />
                         </button>
                     </div>
                     <div style={styles.metaBottom}>
@@ -123,6 +142,25 @@ const styles = {
         justifyContent: 'center',
         cursor: 'pointer',
         color: 'white',
+    },
+    iconBtnActive: {
+        backgroundColor: 'rgba(229,9,20,0.15)',
+        border: '1px solid rgba(229,9,20,0.4)',
+    },
+    progressBg: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        width: '100%',
+        height: '4px',
+        background: 'rgba(255,255,255,0.15)',
+        zIndex: 5,
+    },
+    progressBar: {
+        height: '100%',
+        background: 'linear-gradient(90deg, #E50914, #ff6b6b)',
+        borderRadius: '0 2px 2px 0',
+        transition: 'width 0.3s ease',
     },
     metaBottom: {
         display: 'flex',

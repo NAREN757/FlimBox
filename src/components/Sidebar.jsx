@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Grid, Heart, Download, Settings, LogOut, PlayCircle } from 'lucide-react';
+import { Home, Grid, Heart, Bookmark, Settings, LogOut, PlayCircle } from 'lucide-react';
 
 const Sidebar = ({ activeView, onNavigate, onLogout }) => {
     return (
@@ -15,44 +15,55 @@ const Sidebar = ({ activeView, onNavigate, onLogout }) => {
             <div style={styles.menu}>
                 <NavItem
                     icon={<Home size={24} />}
+                    tooltip="Home"
                     active={activeView === 'home'}
                     onClick={() => onNavigate('home')}
                 />
                 <NavItem
                     icon={<Grid size={24} />}
+                    tooltip="Discover"
                     active={activeView === 'grid'}
                     onClick={() => onNavigate('grid')}
                 />
                 <NavItem
                     icon={<Heart size={24} />}
+                    tooltip="Favorites"
                     active={activeView === 'favorites'}
                     onClick={() => onNavigate('favorites')}
                 />
-
+                <NavItem
+                    icon={<Bookmark size={24} />}
+                    tooltip="Watchlist"
+                    active={activeView === 'watchlist'}
+                    onClick={() => onNavigate('watchlist')}
+                />
             </div>
 
             {/* Bottom Actions */}
             <div style={styles.bottomMenu}>
                 <NavItem
                     icon={<Settings size={24} />}
+                    tooltip="Settings"
                     active={activeView === 'settings'}
                     onClick={() => onNavigate('settings')}
                 />
-                <NavItem icon={<LogOut size={24} />} onClick={onLogout} />
+                <NavItem icon={<LogOut size={24} />} tooltip="Sign Out" onClick={onLogout} />
             </div>
         </div>
     );
 };
 
-const NavItem = ({ icon, active, onClick }) => (
+const NavItem = ({ icon, active, onClick, tooltip }) => (
     <div
         style={{ ...styles.navItem, ...(active ? styles.activeNavItem : {}) }}
         onClick={onClick}
+        title={tooltip}
     >
         {icon}
         {active && <div style={styles.activeIndicator} />}
     </div>
 );
+
 
 const styles = {
     sidebar: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { searchMovies, getMovieDetails, getMovieVideos, getMoviesByGenre } from './services/api';
 import Sidebar from './components/Sidebar';
 import FilmBoxHero from './components/FilmBoxHero';
@@ -6,7 +6,9 @@ import MovieCard from './components/MovieCard';
 import MovieRow from './components/MovieRow';
 import VideoModal from './components/VideoModal';
 import MovieInfoModal from './components/MovieInfoModal';
-import { Search, User, Bell } from 'lucide-react';
+import MoodPicker from './components/MoodPicker';
+import ShortcutsModal from './components/ShortcutsModal';
+import { Search, User, Bell, Dice5, Keyboard } from 'lucide-react';
 import Auth from './components/Auth';
 import Settings from './components/Settings';
 import Footer from './components/Footer';
@@ -18,6 +20,9 @@ import './index.css';
 function App() {
   const [user, setUser] = useState(null); // Auth state
   const [theme, setTheme] = useState('dark'); // 'dark' or 'light'
+
+  // User profile (lifted from Settings so header avatar stays in sync)
+  const [userProfile, setUserProfile] = useState({ avatarId: 1, displayName: '', phone: '' });
 
   const [activeView, setActiveView] = useState('home'); // home, grid, favorites, settings
   const [activeTab, setActiveTab] = useState('Movies'); // Movies, Series, TV Shows
@@ -35,6 +40,13 @@ function App() {
   const [isSearching, setIsSearching] = useState(false);
 
   const [favorites, setFavorites] = useState([]);
+  const [watchlist, setWatchlist] = useState([]);       // Watch Later
+  const [continueWatching, setContinueWatching] = useState([]); // Continue Watching
+  const [activeMood, setActiveMood] = useState('all'); // Mood filter
+  const [moodMovies, setMoodMovies] = useState([]);    // Genre movies for active mood
+  const [isMoodLoading, setIsMoodLoading] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const searchInputRef = useRef(null);
   const [showModal, setShowModal] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [trailerUrl, setTrailerUrl] = useState(null);
@@ -62,6 +74,55 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKey = (e) => {
+      // Skip if typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      switch (e.key.toLowerCase()) {
+        case 'h': updateView('home'); break;
+        case 'f': updateView('favorites'); break;
+        case 'w': updateView('watchlist'); break;
+        case 'd': updateView('grid'); break;
+        case 's':
+          e.preventDefault();
+          searchInputRef.current?.focus();
+          break;
+        case '?':
+          setShowShortcuts(p => !p);
+          break;
+        case 'escape':
+          setShowShortcuts(false);
+          setShowModal(false);
+          setShowInfoModal(false);
+          break;
+        case 'arrowleft':
+          setHeroIndex(p => (p - 1 + heroCandidates.length) % heroCandidates.length);
+          break;
+        case 'arrowright':
+          setHeroIndex(p => (p + 1) % heroCandidates.length);
+          break;
+        default: break;
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [heroCandidates.length]);
+
+  // Load genre movies when mood changes
+  const MOOD_GENRE = { action: 'Action', chill: 'Comedy', laugh: 'Comedy', cry: 'Drama', thriller: 'Thriller', romance: 'Romance', scifi: 'Sci-Fi', horror: 'Horror' };
+  const MOOD_LABEL = { action: '💥 Action Picks', chill: '😌 Chill Picks', laugh: '😂 Comedy Picks', cry: '😢 Drama Picks', thriller: '😨 Thriller Picks', romance: '❤️ Romance Picks', scifi: '🚀 Sci-Fi Picks', horror: '👻 Horror Picks' };
+
+  useEffect(() => {
+    if (activeMood === 'all') { setMoodMovies([]); return; }
+    setIsMoodLoading(true);
+    setMoodMovies([]);
+    getMoviesByGenre(MOOD_GENRE[activeMood])
+      .then(results => setMoodMovies(results || []))
+      .catch(() => setMoodMovies([]))
+      .finally(() => setIsMoodLoading(false));
+  }, [activeMood]);
+
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
@@ -69,6 +130,7 @@ function App() {
   const handleLogin = (userData) => {
     setUser(userData);
     const username = (userData && userData.email) ? userData.email.split('@')[0] : 'User';
+    setUserProfile(prev => ({ ...prev, displayName: userData?.name || username }));
     showToast('Welcome back, ' + username + '!', 'success');
   };
 
@@ -254,6 +316,12 @@ function App() {
     if (url) {
       setTrailerUrl(url);
       setShowModal(true);
+      // Track in Continue Watching with a random progress %
+      setContinueWatching(prev => {
+        const exists = prev.find(m => m.imdbID === movie.imdbID);
+        if (exists) return prev.map(m => m.imdbID === movie.imdbID ? { ...m, progress: Math.min(m.progress + 15, 95) } : m);
+        return [{ ...movie, progress: Math.floor(Math.random() * 35) + 10 }, ...prev].slice(0, 12);
+      });
     } else {
       showToast('Trailer not found for this title.', 'error');
     }
@@ -286,6 +354,27 @@ function App() {
 
   const handleHeaderBellClick = () => {
     showToast('No new notifications.', 'info');
+  };
+
+  // ── Watchlist toggle ───────────────────────────────────────────────────────
+  const toggleWatchlist = (movie) => {
+    if (watchlist.some(w => w.imdbID === movie.imdbID)) {
+      setWatchlist(watchlist.filter(w => w.imdbID !== movie.imdbID));
+      showToast(`Removed "${movie.Title}" from Watchlist`, 'info');
+    } else {
+      setWatchlist([...watchlist, movie]);
+      showToast(`Added "${movie.Title}" to Watch Later 🔖`, 'success');
+    }
+  };
+
+  // ── Pick For Me ────────────────────────────────────────────────────────────
+  const handlePickForMe = () => {
+    const pool = Object.values(categories).flat();
+    if (!pool.length) { showToast('Loading content, try again in a second!', 'info'); return; }
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    setHeroIndex(heroCandidates.findIndex(c => c.imdbID === pick.imdbID) ?? 0);
+    handleSelectMovie(pick.imdbID);
+    showToast(`🎲 We picked "${pick.Title}" for you!`, 'success');
   };
 
   if (!user) {
@@ -345,29 +434,56 @@ function App() {
             </span>
           </div>
 
-          <div style={styles.headerRight}>
+            <div style={styles.headerRight}>
+            {/* Pick For Me button */}
+            <button
+              style={styles.pickBtn}
+              onClick={handlePickForMe}
+              title="Pick a random movie for me!"
+            >
+              <Dice5 size={16} />
+              <span>Pick for Me</span>
+            </button>
+
             <form onSubmit={handleSearch} style={styles.searchForm}>
-              <div style={styles.searchIconWrapper}>
-                <Search size={16} color="white" />
+                <div style={styles.searchIconWrapper}>
+                  <Search size={16} color="white" />
+                </div>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search... (S)"
+                  style={styles.searchInput}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </form>
+
+              {/* Keyboard shortcuts hint */}
+              <div
+                style={{ ...styles.iconBtn, fontSize: '0.7rem', opacity: 0.5 }}
+                onClick={() => setShowShortcuts(true)}
+                title="Keyboard shortcuts (?)"
+              >
+                <Keyboard size={18} />
               </div>
-              <input
-                type="text"
-                placeholder="Search..."
-                style={styles.searchInput}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </form>
 
-            <div style={styles.iconBtn} onClick={handleHeaderBellClick}>
-              <Bell size={20} />
-              <div style={styles.notificationDot} />
-            </div>
+              <div style={styles.iconBtn} onClick={handleHeaderBellClick}>
+                <Bell size={20} />
+                <div style={styles.notificationDot} />
+              </div>
 
-            <div style={{ ...styles.avatar, cursor: 'pointer' }} onClick={handleHeaderUserClick}>
-              <User size={20} />
+              <div
+                style={{
+                  ...styles.avatar,
+                  cursor: 'pointer',
+                  background: userProfile.avatarId ? undefined : '#333',
+                }}
+                onClick={handleHeaderUserClick}
+              >
+                <HeaderAvatar avatarId={userProfile.avatarId} />
+              </div>
             </div>
-          </div>
         </div>
 
         {/* Hero Section */}
@@ -383,6 +499,13 @@ function App() {
           />
         )}
 
+        {/* MoodPicker — outside the overlap zone, always fully visible */}
+        {activeView === 'home' && (
+          <div style={styles.moodPickerSection}>
+            <MoodPicker activeMood={activeMood} onSelectMood={setActiveMood} />
+          </div>
+        )}
+
         {/* Settings Section */}
         {activeView === 'settings' && (
           <div style={styles.contentSection}>
@@ -390,6 +513,10 @@ function App() {
               theme={theme}
               toggleTheme={toggleTheme}
               user={user}
+              userProfile={userProfile}
+              onSaveProfile={(profile) => {
+                setUserProfile(profile);
+              }}
               onLogout={confirmLogout}
             />
           </div>
@@ -397,7 +524,7 @@ function App() {
 
         {/* Content Section */}
         {activeView !== 'settings' && (
-          <div style={{ ...styles.contentSection, marginTop: activeView === 'home' ? '-100px' : '100px', position: 'relative', zIndex: 20 }}>
+          <div style={{ ...styles.contentSection, marginTop: activeView === 'home' ? '-60px' : '100px', position: 'relative', zIndex: 20 }}>
 
             {/* Search View */}
             {activeView === 'search' && (
@@ -425,8 +552,46 @@ function App() {
 
             {/* Home View - Categories (Rows) */}
             {activeView === 'home' && !isSearching && (
-              <div>
-                {/* Skeletons if loading categories */}
+              <div style={{ paddingTop: '30px' }}>
+                {/* Continue Watching row */}
+                {continueWatching.length > 0 && (
+                  <MovieRow
+                    title="⏱ Continue Watching"
+                    movies={continueWatching}
+                    onSelect={handleSelectMovie}
+                    onPlay={handleWatch}
+                    onToggle={toggleFavorite}
+                    favorites={favorites}
+                    watchlist={watchlist}
+                    onToggleWatchlist={toggleWatchlist}
+                    showProgress
+                  />
+                )}
+
+                {/* Mood-filtered row — pinned at top, never replaces regular rows */}
+                {activeMood !== 'all' && (
+                  isMoodLoading ? (
+                    <div style={{ padding: '0 60px', marginBottom: '40px' }}>
+                      <Skeleton width="220px" height="28px" style={{ marginBottom: '16px' }} />
+                      <div style={{ display: 'flex', gap: '15px' }}>
+                        {[1,2,3,4,5].map(i => <Skeleton key={i} width="200px" height="300px" />)}
+                      </div>
+                    </div>
+                  ) : moodMovies.length > 0 ? (
+                    <MovieRow
+                      title={MOOD_LABEL[activeMood] || '🎭 Mood Picks'}
+                      movies={moodMovies}
+                      onSelect={handleSelectMovie}
+                      onPlay={handleWatch}
+                      onToggle={toggleFavorite}
+                      favorites={favorites}
+                      watchlist={watchlist}
+                      onToggleWatchlist={toggleWatchlist}
+                    />
+                  ) : null
+                )}
+
+                {/* Regular category rows — always visible */}
                 {Object.keys(categories).length === 0 ? (
                   <div style={styles.containerPadding}>
                     {[1, 2, 3].map(i => (
@@ -450,6 +615,8 @@ function App() {
                       onPlay={handleWatch}
                       onToggle={toggleFavorite}
                       favorites={favorites}
+                      watchlist={watchlist}
+                      onToggleWatchlist={toggleWatchlist}
                     />
                   ))
                 )}
@@ -459,7 +626,7 @@ function App() {
             {/* Favorites View */}
             {activeView === 'favorites' && (
               <div style={styles.containerPadding}>
-                <h2 style={styles.sectionTitle}>My Favorites</h2>
+                <h2 style={styles.sectionTitle}>❤️ My Favorites</h2>
                 <div style={styles.grid}>
                   {favorites.length > 0 ? favorites.map(movie => (
                     <MovieCard
@@ -469,8 +636,43 @@ function App() {
                       onPlay={handleWatch}
                       onToggleFavorite={toggleFavorite}
                       isFavorite={true}
+                      onToggleWatchlist={toggleWatchlist}
+                      isWatchlisted={watchlist.some(w => w.imdbID === movie.imdbID)}
                     />
-                  )) : <p style={{ color: '#666' }}>No favorites yet.</p>}
+                  )) : (
+                    <div style={styles.emptyState}>
+                      <span style={styles.emptyIcon}>❤️</span>
+                      <p style={styles.emptyText}>No favorites yet.</p>
+                      <p style={styles.emptyHint}>Click + on any movie card to add it here.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Watchlist View */}
+            {activeView === 'watchlist' && (
+              <div style={styles.containerPadding}>
+                <h2 style={styles.sectionTitle}>🔖 Watch Later</h2>
+                <div style={styles.grid}>
+                  {watchlist.length > 0 ? watchlist.map(movie => (
+                    <MovieCard
+                      key={movie.imdbID}
+                      movie={movie}
+                      onClick={handleSelectMovie}
+                      onPlay={handleWatch}
+                      onToggleFavorite={toggleFavorite}
+                      isFavorite={favorites.some(f => f.imdbID === movie.imdbID)}
+                      onToggleWatchlist={toggleWatchlist}
+                      isWatchlisted={true}
+                    />
+                  )) : (
+                    <div style={styles.emptyState}>
+                      <span style={styles.emptyIcon}>🔖</span>
+                      <p style={styles.emptyText}>Your watchlist is empty.</p>
+                      <p style={styles.emptyHint}>Hover any movie and click the bookmark icon to save it for later.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -542,6 +744,11 @@ function App() {
           onToggleFavorite={toggleFavorite}
           isFavorite={selectedMovie && favorites.some(f => f.imdbID === selectedMovie.imdbID)}
         />
+      )}
+
+      {/* Keyboard Shortcuts Modal */}
+      {showShortcuts && (
+        <ShortcutsModal onClose={() => setShowShortcuts(false)} />
       )}
 
       {/* Logout Confirmation Modal */}
@@ -756,7 +963,84 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: '0 0 10px rgba(229, 9, 20, 0.5)',
-  }
+  },
+  pickBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    background: 'linear-gradient(135deg, rgba(229,9,20,0.2), rgba(229,9,20,0.08))',
+    border: '1px solid rgba(229,9,20,0.3)',
+    color: 'rgba(255,255,255,0.85)',
+    borderRadius: '30px',
+    padding: '7px 16px',
+    fontSize: '0.82rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    backdropFilter: 'blur(8px)',
+    whiteSpace: 'nowrap',
+  },
+  emptyState: {
+    gridColumn: '1 / -1',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '80px 20px',
+    gap: '12px',
+  },
+  emptyIcon: { fontSize: '3rem' },
+  emptyText: { fontSize: '1.2rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)' },
+  emptyHint: { fontSize: '0.88rem', color: 'rgba(255,255,255,0.35)', textAlign: 'center', maxWidth: '300px' },
+  moodPickerWrapper: {
+    paddingTop: '20px',
+    paddingBottom: '10px',
+  },
+  moodPickerSection: {
+    position: 'relative',
+    zIndex: 25,
+    background: 'linear-gradient(to bottom, transparent, #0f0f0f 60%)',
+    marginTop: '-80px',  /* Pulls up snugly against hero bottom */
+    paddingTop: '20px',
+  },
+};
+
+// Shared avatar list (must match Settings.jsx)
+const AVATARS = [
+  { id: 1,  emoji: '🦁', bg: 'linear-gradient(135deg,#f97316,#ef4444)' },
+  { id: 2,  emoji: '🐺', bg: 'linear-gradient(135deg,#8b5cf6,#6366f1)' },
+  { id: 3,  emoji: '🦊', bg: 'linear-gradient(135deg,#f59e0b,#f97316)' },
+  { id: 4,  emoji: '🐉', bg: 'linear-gradient(135deg,#10b981,#059669)' },
+  { id: 5,  emoji: '🦅', bg: 'linear-gradient(135deg,#3b82f6,#6366f1)' },
+  { id: 6,  emoji: '🐼', bg: 'linear-gradient(135deg,#64748b,#334155)' },
+  { id: 7,  emoji: '🦋', bg: 'linear-gradient(135deg,#ec4899,#8b5cf6)' },
+  { id: 8,  emoji: '🐬', bg: 'linear-gradient(135deg,#06b6d4,#3b82f6)' },
+  { id: 9,  emoji: '🦄', bg: 'linear-gradient(135deg,#f472b6,#a78bfa)' },
+  { id: 10, emoji: '🐍', bg: 'linear-gradient(135deg,#84cc16,#22c55e)' },
+  { id: 11, emoji: '🦈', bg: 'linear-gradient(135deg,#0ea5e9,#1d4ed8)' },
+  { id: 12, emoji: '🔥', bg: 'linear-gradient(135deg,#f97316,#dc2626)' },
+];
+
+// Mini avatar shown in the top-right header corner
+const HeaderAvatar = ({ avatarId }) => {
+  const av = AVATARS.find(a => a.id === avatarId);
+  if (!av) return <User size={18} />;
+  return (
+    <div style={{
+      width: '100%',
+      height: '100%',
+      borderRadius: '50%',
+      background: av.bg,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '1.1rem',
+      lineHeight: 1,
+    }}>
+      {av.emoji}
+    </div>
+  );
 };
 
 export default App;
+

@@ -81,10 +81,10 @@ const styles = {
     hero: {
         position: 'relative',
         width: '100%',
-        height: '85vh', // Taller, more cinematic
+        height: '72vh',
         backgroundSize: 'cover',
         backgroundPosition: 'center top',
-        marginTop: '0', // Reset
+        marginTop: '0',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -204,13 +204,13 @@ const styles = {
     },
     dotsContainer: {
         position: 'absolute',
-        bottom: '130px', // Moved up to avoid overlap with negative margin content
+        bottom: '80px',
         display: 'flex',
         gap: '10px',
-        zIndex: 100, // Increased z-index
+        zIndex: 100,
         padding: '10px',
         borderRadius: '20px',
-        background: 'rgba(0,0,0,0.3)', // Semi-transparent background to make dots pop
+        background: 'rgba(0,0,0,0.3)',
         backdropFilter: 'blur(4px)',
     },
     carouselDot: {
