@@ -67,6 +67,8 @@ const styles = {
     padding: '0 60px 20px',
     position: 'relative',
     zIndex: 20,
+    /* Allow chip shadows to render outside without clipping */
+    overflow: 'visible',
   },
   header: {
     marginBottom: '12px',
@@ -82,7 +84,10 @@ const styles = {
     display: 'flex',
     gap: '10px',
     overflowX: 'auto',
-    paddingBottom: '4px',
+    /* Padding gives room for top/side shadows to render without clipping */
+    paddingTop: '8px',
+    paddingBottom: '10px',
+    marginTop: '-8px',
   },
   chip: {
     display: 'flex',
@@ -94,7 +99,9 @@ const styles = {
     cursor: 'pointer',
     whiteSpace: 'nowrap',
     transition: 'all 0.25s cubic-bezier(0.34,1.56,0.64,1)',
-    flexShrink: 0,
+    /* Grow equally to fill all available horizontal space */
+    flex: '1 1 0',
+    minWidth: '80px',
     fontFamily: 'var(--font-main)',
   },
   chipLabel: {
